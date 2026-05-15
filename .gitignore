@@ -1,0 +1,11 @@
+.marketplace-local/
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+node_modules/
+package-lock.json
+RISKS.md
+SESSION_LOG.md
+CLAUDE.md

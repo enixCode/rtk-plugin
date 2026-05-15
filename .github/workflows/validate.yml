@@ -1,0 +1,70 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate JSON files
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          status=0
+          for f in **/*.json; do
+            echo "::group::$f"
+            if ! jq empty "$f"; then status=1; fi
+            echo "::endgroup::"
+          done
+          exit "$status"
+
+      - name: Validate plugin manifest required fields
+        run: jq -e 'has("name") and has("version") and has("description")' .claude-plugin/plugin.json
+
+      - name: Validate hooks.json shape
+        run: jq -e '.hooks.PreToolUse and .hooks.SessionStart' hooks/hooks.json
+
+  dispatch-smoke:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Smoke test wrapper + dispatch (no RTK in CI → every case passthrough)
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x bin/dispatch.sh scripts/bootstrap-rtk.sh
+          export CLAUDE_PLUGIN_ROOT="$PWD"
+          export CLAUDE_PLUGIN_DATA="$(mktemp -d)"
+
+          expect_passthrough() {
+            local cmd="$1"
+            local out
+            out=$(jq -n --arg cmd "$cmd" '{tool_input:{command:$cmd}}' | bash bin/dispatch.sh)
+            [ -z "$out" ] || { echo "expected passthrough for: $cmd, got: $out"; exit 1; }
+            echo "ok: $cmd"
+          }
+
+          expect_passthrough "git status"
+          expect_passthrough "git status | head"
+          expect_passthrough "echo hi && ls"
+          expect_passthrough "whoami"
+          expect_passthrough "rtk git status"
+          expect_passthrough "make build"
+          expect_passthrough "mvn install"

@@ -1,0 +1,68 @@
+name: upstream-watch
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump-rtk:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve latest RTK release
+        id: latest
+        run: |
+          set -euo pipefail
+          tag=$(curl -fsSL https://api.github.com/repos/rtk-ai/rtk/releases/latest | jq -r '.tag_name')
+          [ -n "$tag" ] && [ "$tag" != "null" ] || { echo "could not resolve latest tag"; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Read pinned version
+        id: pinned
+        run: |
+          pinned=$(grep -E '^const REQUIRED_RTK_VERSION' scripts/bootstrap-rtk.mjs | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "version=$pinned" >> "$GITHUB_OUTPUT"
+
+      - name: Exit if already current
+        if: steps.latest.outputs.tag == steps.pinned.outputs.version
+        run: echo "rtk already pinned to ${{ steps.latest.outputs.tag }}"
+
+      - name: Bump pinned version
+        if: steps.latest.outputs.tag != steps.pinned.outputs.version
+        env:
+          LATEST_TAG: ${{ steps.latest.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Validate the tag shape before injecting it anywhere. RTK upstream tags
+          # are always "vX.Y.Z" — anything else is suspicious and we bail.
+          if ! [[ "$LATEST_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::refusing to inject suspicious tag: $LATEST_TAG"
+            exit 1
+          fi
+          sed -i -E "s|^const REQUIRED_RTK_VERSION = \"[^\"]+\"|const REQUIRED_RTK_VERSION = \"${LATEST_TAG}\"|" scripts/bootstrap-rtk.mjs
+          jq --arg v "$(jq -r '.version' .claude-plugin/plugin.json | awk -F. '{printf "%d.%d.%d", $1, $2, $3+1}')" \
+             '.version = $v' .claude-plugin/plugin.json > .claude-plugin/plugin.json.tmp
+          mv .claude-plugin/plugin.json.tmp .claude-plugin/plugin.json
+
+      - name: Open PR
+        if: steps.latest.outputs.tag != steps.pinned.outputs.version
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore(rtk): bump pinned RTK to ${{ steps.latest.outputs.tag }}"
+          title: "chore(rtk): bump pinned RTK to ${{ steps.latest.outputs.tag }}"
+          body: |
+            Automated bump from upstream-watch.
+
+            - RTK: `${{ steps.pinned.outputs.version }}` → `${{ steps.latest.outputs.tag }}`
+            - Plugin version: patch-bumped.
+
+            CI must pass before merge.
+          branch: bot/rtk-bump-${{ steps.latest.outputs.tag }}
+          base: main
+          delete-branch: true

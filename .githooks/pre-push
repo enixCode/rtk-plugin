@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Refuses to push a vX.Y.Z tag whose version doesn't match
+# .claude-plugin/plugin.json. Stops the "I tagged but forgot to bump" mistake
+# locally, before the workflow has to fail on it.
+#
+# One-time setup: git config core.hooksPath .githooks
+
+set -euo pipefail
+
+while read -r local_ref _local_oid _remote_ref _remote_oid; do
+  if [[ "$local_ref" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+    tag_version="${BASH_REMATCH[1]}"
+    # Use node (already required by the plugin) instead of jq — jq is
+    # rarely on PATH inside Git's hook subshell on Windows.
+    plugin_version=$(node -e "process.stdout.write(require('./.claude-plugin/plugin.json').version)")
+    if [ "$tag_version" != "$plugin_version" ]; then
+      echo "pre-push: tag $local_ref does not match plugin.json version $plugin_version" >&2
+      echo "pre-push: bump .claude-plugin/plugin.json to $tag_version first, or delete the tag" >&2
+      exit 1
+    fi
+    echo "pre-push: ok, tag $local_ref matches plugin.json"
+  fi
+done
