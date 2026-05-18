@@ -22,7 +22,12 @@ class HookEvent {
 }
 
 class ParsedCommand {
-  static SHELL_FEATURES = /[|&;<>`$()]|\|\||&&|>>/;
+  // Strip benign IO redirections (2>&1, 2>/dev/null, >file, >>file, <input) before
+  // checking for shell features. Claude Code appends `2>&1` to most Bash calls, so
+  // matching it as a shell feature meant the dispatcher passed through nearly
+  // everything and no compression ever happened.
+  static STRIP_REDIR = /\s\d?>>?(?:&\d|\S+)|\s<\S+/g;
+  static SHELL_FEATURES = /[|&;`$()]|\|\||&&/;
   static ALREADY_RTK = /^(?:\S*\/)?rtk\s/;
 
   constructor(raw) {
@@ -31,7 +36,9 @@ class ParsedCommand {
     this.program = first.split("/").pop();
     this.args = rest;
   }
-  get usesShellFeatures() { return ParsedCommand.SHELL_FEATURES.test(this.raw); }
+  get usesShellFeatures() {
+    return ParsedCommand.SHELL_FEATURES.test(this.raw.replace(ParsedCommand.STRIP_REDIR, ""));
+  }
   get alreadyWrapped() { return ParsedCommand.ALREADY_RTK.test(this.raw); }
 }
 

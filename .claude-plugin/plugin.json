@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "rtk-plugin",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Transparent token compression for Claude Code shell calls. Wraps RTK with lazy binary download and adds verticals RTK does not cover (Terraform, etc.).",
   "author": {
     "name": "enixCode",
