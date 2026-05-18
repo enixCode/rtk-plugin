@@ -102,11 +102,17 @@ class RtkInstall {
   }
   async commit(binarySrc, binName, version, isWindows) {
     const dest = join(this.rtkDir, binName);
-    try { await rename(binarySrc, dest); }
-    catch { await writeFile(dest, await readFile(binarySrc)); }
-    if (!isWindows) await chmod(dest, 0o755).catch(() => {});
-    // Write .version atomically: a partially written file would make isCurrent()
-    // misreport on the next session start.
+    // Atomic-replace the binary too: a partially written rtk.exe would make
+    // existsSync() lie to the dispatcher, which would then spawn a broken
+    // binary. Write into <dest>.new on the destination FS first so the final
+    // rename is always same-FS (and therefore atomic).
+    const destTmp = `${dest}.new`;
+    try { await rename(binarySrc, destTmp); }
+    catch { await writeFile(destTmp, await readFile(binarySrc)); }
+    if (!isWindows) await chmod(destTmp, 0o755).catch(() => {});
+    await rename(destTmp, dest);
+    // Write .version atomically too: a partially written file would make
+    // isCurrent() misreport on the next session start.
     const versionTmp = `${this.versionFile}.new`;
     await writeFile(versionTmp, version);
     await rename(versionTmp, this.versionFile);

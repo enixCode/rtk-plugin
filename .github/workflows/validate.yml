@@ -45,7 +45,7 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Smoke test dispatch (no RTK in CI → every case passthrough)
+      - name: Smoke test dispatch passthrough (no RTK binary)
         shell: bash
         run: |
           set -euo pipefail
@@ -67,3 +67,55 @@ jobs:
           expect_passthrough "rtk git status"
           expect_passthrough "make build"
           expect_passthrough "mvn install"
+
+      - name: Smoke test dispatch rewrite (mock RTK binary present)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CLAUDE_PLUGIN_ROOT="$PWD"
+          export CLAUDE_PLUGIN_DATA="$(mktemp -d)"
+          mkdir -p "$CLAUDE_PLUGIN_DATA/rtk"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            : > "$CLAUDE_PLUGIN_DATA/rtk/rtk.exe"
+          else
+            : > "$CLAUDE_PLUGIN_DATA/rtk/rtk"
+            chmod +x "$CLAUDE_PLUGIN_DATA/rtk/rtk"
+          fi
+
+          expect_rewrite() {
+            local cmd="$1"
+            local out
+            out=$(jq -n --arg cmd "$cmd" '{tool_input:{command:$cmd}}' | node bin/dispatch.mjs)
+            echo "$out" | jq -e '.hookSpecificOutput.updatedInput.command | test("rtk(\\.exe)?")' >/dev/null \
+              || { echo "expected rewrite for: $cmd, got: $out"; exit 1; }
+            echo "ok-rewrite: $cmd"
+          }
+
+          expect_passthrough() {
+            local cmd="$1"
+            local out
+            out=$(jq -n --arg cmd "$cmd" '{tool_input:{command:$cmd}}' | node bin/dispatch.mjs)
+            [ -z "$out" ] || { echo "expected passthrough for: $cmd, got: $out"; exit 1; }
+            echo "ok-pass: $cmd"
+          }
+
+          # Rewrites: plain + IO redirections must reach RTK.
+          expect_rewrite "git status"
+          expect_rewrite "ls -la /tmp"
+          expect_rewrite "git log 2>&1"
+          expect_rewrite "git status 2>/dev/null"
+          expect_rewrite "git log > out.txt"
+          expect_rewrite "git log >> out.txt"
+          expect_rewrite "cat <<EOF"
+          expect_rewrite "grep foo <<<bar"
+
+          # Passthroughs: real chaining + already-wrapped + non-tool.
+          expect_passthrough "git status | head"
+          expect_passthrough "git add . && git commit"
+          expect_passthrough "git pull || echo fail"
+          expect_passthrough "ls; pwd"
+          expect_passthrough "git log \$(whoami)"
+          expect_passthrough "rtk git status"
+          expect_passthrough "/usr/bin/rtk git status"
+          expect_passthrough "\"C:\\rtk.exe\" git status"
+          expect_passthrough "whoami"

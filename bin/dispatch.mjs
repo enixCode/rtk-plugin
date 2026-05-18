@@ -28,7 +28,7 @@ class ParsedCommand {
   // everything and no compression ever happened.
   static STRIP_REDIR = /\s\d?>>?(?:&\d|\S+)|\s<\S+/g;
   static SHELL_FEATURES = /[|&;`$()]|\|\||&&/;
-  static ALREADY_RTK = /^(?:\S*\/)?rtk\s/;
+  static ALREADY_RTK = /^["']?(?:\S*[\\\/])?rtk(?:\.exe)?["']?\s/i;
 
   constructor(raw) {
     this.raw = raw;
@@ -60,8 +60,8 @@ class RtkRoute {
   static TOOLS = new Set([
     "git", "gh", "ls", "find", "grep", "diff", "cat", "less", "head", "tail",
     "cargo", "go", "pytest", "jest", "vitest", "playwright", "rake", "rspec", "mocha",
-    "eslint", "tsc", "prettier", "ruff", "rubocop", "golangci-lint", "next", "webpack",
-    "npm", "pnpm", "yarn", "pip", "pipx", "poetry", "bundle", "prisma",
+    "eslint", "tsc", "prettier", "ruff", "rubocop", "golangci-lint",
+    "npm", "npx", "pnpm", "yarn", "pip", "pipx", "poetry", "bundle", "prisma",
     "docker", "kubectl", "helm", "aws", "gcloud", "az",
     "curl", "wget", "jq",
   ]);
