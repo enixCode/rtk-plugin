@@ -5,7 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/bootstrap-rtk.sh\"",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/bootstrap-rtk.mjs"],
             "timeout": 120
           }
         ]
@@ -17,7 +18,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/dispatch.sh\"",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/bin/dispatch.mjs"],
             "timeout": 10
           }
         ]

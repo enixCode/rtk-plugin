@@ -45,18 +45,17 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Smoke test wrapper + dispatch (no RTK in CI → every case passthrough)
+      - name: Smoke test dispatch (no RTK in CI → every case passthrough)
         shell: bash
         run: |
           set -euo pipefail
-          chmod +x bin/dispatch.sh scripts/bootstrap-rtk.sh
           export CLAUDE_PLUGIN_ROOT="$PWD"
           export CLAUDE_PLUGIN_DATA="$(mktemp -d)"
 
           expect_passthrough() {
             local cmd="$1"
             local out
-            out=$(jq -n --arg cmd "$cmd" '{tool_input:{command:$cmd}}' | bash bin/dispatch.sh)
+            out=$(jq -n --arg cmd "$cmd" '{tool_input:{command:$cmd}}' | node bin/dispatch.mjs)
             [ -z "$out" ] || { echo "expected passthrough for: $cmd, got: $out"; exit 1; }
             echo "ok: $cmd"
           }
