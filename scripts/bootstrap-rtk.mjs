@@ -10,7 +10,7 @@ import { join, basename } from "node:path";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 
-const REQUIRED_RTK_VERSION = "v0.40.0";
+const REQUIRED_RTK_VERSION = "v0.42.3";
 const RTK_REPO = "rtk-ai/rtk";
 
 class Logger {
@@ -100,6 +100,13 @@ class RtkInstall {
     if (!existsSync(this.versionFile)) return false;
     return (await readFile(this.versionFile, "utf8")).trim() === version;
   }
+  currentBinary() {
+    for (const name of ["rtk.exe", "rtk"]) {
+      const p = join(this.rtkDir, name);
+      if (existsSync(p)) return p;
+    }
+    return null;
+  }
   async commit(binarySrc, binName, version, isWindows) {
     const dest = join(this.rtkDir, binName);
     // Atomic-replace the binary too: a partially written rtk.exe would make
@@ -129,7 +136,10 @@ class Bootstrap {
   }
   async run() {
     await mkdir(this.install.rtkDir, { recursive: true });
-    if (await this.install.isCurrent(REQUIRED_RTK_VERSION)) process.exit(0);
+    if (await this.install.isCurrent(REQUIRED_RTK_VERSION)) {
+      await Bootstrap.initRtk(this.install.currentBinary());
+      process.exit(0);
+    }
 
     const plat = Platform.detect();
     if (!plat) Logger.bail(`unsupported platform ${platform()} ${arch()}`);
@@ -150,6 +160,13 @@ class Bootstrap {
 
     const dest = await this.install.commit(found, plat.binName, REQUIRED_RTK_VERSION, plat.isWindows);
     Logger.info(`RTK ${REQUIRED_RTK_VERSION} ready at ${dest}`);
+    await Bootstrap.initRtk(dest);
+  }
+
+  static async initRtk(binary) {
+    try {
+      await Archive.run(binary, ["init", "-g"], { stdio: "ignore" });
+    } catch {}
   }
 }
 

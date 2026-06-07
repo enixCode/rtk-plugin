@@ -18,7 +18,7 @@ RTK already solves this — it compresses tool output to keep only what matters.
 /plugin install rtk-plugin@enix
 ```
 
-Restart Claude Code. On first launch the `SessionStart` hook downloads the pinned RTK release into `${CLAUDE_PLUGIN_DATA}/rtk/` (about 5 MB, ~3 s on a normal connection). Subsequent sessions reuse the cached copy.
+Restart Claude Code. On first launch the `SessionStart` hook downloads the pinned RTK release into `${CLAUDE_PLUGIN_DATA}/rtk/` (about 5 MB, ~3 s on a normal connection) and initializes it globally — no manual `rtk init -g` required. Subsequent sessions reuse the cached copy.
 
 ## Observe the savings (example)
 
@@ -51,16 +51,16 @@ The complete list of programs RTK compresses is defined in [`bin/dispatch.mjs`](
 ## How it works
 
 ```
-SessionStart  ─►  scripts/bootstrap-rtk.sh  ─►  scripts/bootstrap-rtk.mjs
-                  (checks for node)             downloads RTK into
-                                                ${CLAUDE_PLUGIN_DATA}/rtk/
+SessionStart  ─►  node scripts/bootstrap-rtk.mjs
+                  downloads RTK into ${CLAUDE_PLUGIN_DATA}/rtk/
+                  then runs `rtk init -g` (silent, once per session)
 
-PreToolUse    ─►  bin/dispatch.sh  ─►  bin/dispatch.mjs
-on Bash           (checks for node)    parses the event, routes to RtkRoute,
-                                       emits hookSpecificOutput JSON
+PreToolUse    ─►  node bin/dispatch.mjs
+on Bash           parses the hook event, routes to RtkRoute,
+                  emits hookSpecificOutput JSON
 ```
 
-The `.sh` wrappers exist for one reason: if `node` is missing they exit 0 silently so Claude Code's transcript stays clean. No compression, no error.
+Hooks use exec form (`command: "node"` + `args: [...]`) so the script is spawned directly without a shell. The `.sh` wrappers in `bin/` and `scripts/` exist for reference and direct shell invocation only; they are not wired into `hooks.json`.
 
 ## Requirements
 
