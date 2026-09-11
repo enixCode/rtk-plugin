@@ -10,7 +10,7 @@ import { join, basename } from "node:path";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 
-const REQUIRED_RTK_VERSION = "v0.42.3";
+const REQUIRED_RTK_VERSION = "v0.49.0";
 const RTK_REPO = "rtk-ai/rtk";
 
 class Logger {
